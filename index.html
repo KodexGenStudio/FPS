@@ -1,585 +1,162 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-<title>Refresh Rate Check</title>
-<style>
-  :root{
-    --bg:#0a0c0f;
-    --panel:#12161b;
-    --panel-2:#171c22;
-    --line:#242b33;
-    --text:#e7ecef;
-    --muted:#7b8894;
-    --phosphor:#39ff8a;
-    --phosphor-dim:#1f6b42;
-    --amber:#ffb545;
-    --mono:'JetBrains Mono','SF Mono',ui-monospace,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  }
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;}
-  #app{position:relative;width:100%;height:100vh;height:100dvh;overflow:hidden;}
-
-  .screen{
-    position:absolute;inset:0;
-    display:flex;flex-direction:column;
-    padding:28px 22px;
-    opacity:0;pointer-events:none;
-    transform:translateY(14px);
-    transition:opacity .35s ease, transform .35s ease;
-  }
-  .screen.active{opacity:1;pointer-events:auto;transform:translateY(0);}
-
-  /* ---------- shared bits ---------- */
-  .eyebrow{
-    font-family:var(--mono);font-size:11px;letter-spacing:.22em;
-    color:var(--phosphor);text-transform:uppercase;margin-bottom:6px;
-  }
-  h1{font-size:26px;margin:0 0 4px;font-weight:700;letter-spacing:-.01em;}
-  .sub{color:var(--muted);font-size:14px;line-height:1.5;margin:0 0 22px;}
-  button.primary{
-    font-family:var(--mono);font-size:13px;letter-spacing:.05em;text-transform:uppercase;
-    background:var(--phosphor);color:#04140a;border:none;border-radius:10px;
-    padding:15px 18px;font-weight:700;cursor:pointer;width:100%;
-  }
-  button.primary:active{transform:scale(.98);}
-  button.ghost{
-    font-family:var(--mono);font-size:12px;letter-spacing:.05em;
-    background:transparent;color:var(--muted);border:1px solid var(--line);
-    border-radius:10px;padding:10px 14px;cursor:pointer;text-transform:uppercase;
-  }
-  .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
-  .topbar .back{font-family:var(--mono);font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;padding:6px 0;}
-
-  /* ---------- landing ---------- */
-  #screen-landing{justify-content:space-between;}
-  .scope{
-    flex:1;display:flex;align-items:center;justify-content:center;min-height:180px;
-    position:relative;
-  }
-  .scope svg{width:100%;max-width:340px;height:auto;}
-  .scope-grid line{stroke:var(--line);stroke-width:1;}
-  .scope-wave{
-    fill:none;stroke:var(--phosphor);stroke-width:2;
-    filter:drop-shadow(0 0 6px rgba(57,255,138,.55));
-  }
-  .landing-foot{margin-top:auto;}
-  .landing-foot .hint{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:10px;text-align:center;letter-spacing:.04em;}
-
-  /* ---------- specs ---------- */
-  .spec-card{
-    background:var(--panel);border:1px solid var(--line);border-radius:12px;
-    padding:16px 16px 4px;margin-bottom:14px;
-  }
-  .spec-row{
-    display:flex;justify-content:space-between;gap:12px;
-    padding:11px 0;border-bottom:1px solid var(--line);
-    font-family:var(--mono);font-size:12.5px;
-  }
-  .spec-row:last-child{border-bottom:none;}
-  .spec-row .k{color:var(--muted);letter-spacing:.03em;}
-  .spec-row .v{color:var(--text);text-align:right;max-width:60%;word-break:break-word;}
-  .spec-scroll{overflow-y:auto;flex:1;padding-bottom:8px;}
-  .device-headline{
-    font-family:var(--mono);font-size:15px;color:var(--phosphor);
-    border:1px solid var(--phosphor-dim);border-radius:10px;
-    padding:12px 14px;margin-bottom:16px;background:rgba(57,255,138,.06);
-  }
-  .device-headline .model{display:block;font-size:19px;font-weight:700;margin-bottom:2px;color:var(--text);}
-
-  /* ---------- fps select ---------- */
-  .fps-grid{
-    display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
-    overflow-y:auto;padding-bottom:8px;
-  }
-  .fps-opt{
-    background:var(--panel);border:1px solid var(--line);border-radius:12px;
-    padding:16px 8px;text-align:center;cursor:pointer;
-  }
-  .fps-opt .n{font-family:var(--mono);font-size:22px;font-weight:700;display:block;color:var(--text);}
-  .fps-opt .u{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;}
-  .fps-opt:active{background:var(--panel-2);border-color:var(--phosphor-dim);}
-  .fps-opt.hero{grid-column:span 3;display:flex;align-items:center;justify-content:space-between;padding:16px 18px;}
-  .fps-opt.hero .n{font-size:26px;}
-
-  /* ---------- home sim ---------- */
-  #screen-home-sim{padding:0;}
-  .sim-status{
-    display:flex;justify-content:space-between;align-items:center;
-    padding:10px 20px 4px;font-family:var(--sans);font-size:13px;color:#f2f2f2;
-    background:linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,0));
-    position:relative;z-index:5;
-  }
-  .sim-search{
-    margin:10px 18px 14px;padding:11px 16px;border-radius:24px;
-    background:rgba(255,255,255,.14);color:rgba(255,255,255,.75);font-size:14px;
-    display:flex;align-items:center;justify-content:space-between;
-  }
-  .sim-wrap{position:relative;flex:1;overflow:hidden;}
-  .sim-pages{position:absolute;inset:0;display:flex;width:200%;height:100%;will-change:transform;}
-  .sim-page{width:50%;height:100%;padding:2px 18px 0;}
-  .sim-icon-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:22px 6px;}
-  .sim-icon{display:flex;flex-direction:column;align-items:center;gap:6px;}
-  .sim-icon .tile{
-    width:58px;height:58px;border-radius:16px;display:flex;align-items:center;justify-content:center;
-    font-size:24px;box-shadow:0 2px 6px rgba(0,0,0,.35);position:relative;
-  }
-  .sim-icon .badge{
-    position:absolute;top:-6px;right:-6px;background:#ff4d2e;color:#fff;font-size:9px;
-    font-family:var(--mono);font-weight:700;border-radius:8px;padding:1px 5px;min-width:14px;text-align:center;
-  }
-  .sim-icon .label{font-size:11px;color:rgba(255,255,255,.92);text-align:center;line-height:1.2;text-shadow:0 1px 2px rgba(0,0,0,.6);}
-  .sim-dots{display:flex;justify-content:center;gap:6px;padding:14px 0 8px;}
-  .sim-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.3);}
-  .sim-dots span.on{background:#fff;}
-
-  .hud{
-    position:absolute;top:0;left:0;right:0;z-index:6;
-    display:flex;justify-content:space-between;align-items:flex-start;
-    padding:8px 14px;pointer-events:none;
-  }
-  .hud .chip{
-    font-family:var(--mono);font-size:10px;letter-spacing:.05em;
-    background:rgba(0,0,0,.55);border:1px solid rgba(57,255,138,.4);
-    color:var(--phosphor);border-radius:8px;padding:5px 8px;line-height:1.4;
-    backdrop-filter:blur(2px);
-  }
-  .hud .chip b{font-size:13px;display:block;color:#fff;}
-  .sim-controls{
-    position:absolute;bottom:0;left:0;right:0;z-index:6;
-    display:flex;gap:10px;padding:14px 16px 20px;
-    background:linear-gradient(0deg, rgba(0,0,0,.55), rgba(0,0,0,0));
-  }
-  .sim-controls button{flex:1;}
-  .sim-controls .back{
-    font-family:var(--mono);font-size:11px;background:rgba(0,0,0,.5);color:#fff;
-    border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:12px;cursor:pointer;
-  }
-  .sim-controls .demo{
-    font-family:var(--mono);font-size:11px;background:var(--phosphor);color:#04140a;font-weight:700;
-    border:none;border-radius:10px;padding:12px;cursor:pointer;
-  }
-  .sim-controls .demo.active{background:var(--amber);}
-  .bgshift{position:absolute;inset:0;z-index:0;}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal FPS & Refresh Rate Tester</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 16px 24px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+        .stat-group {
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #38bdf8;
+        }
+        canvas {
+            display: block;
+            flex-grow: 1;
+        }
+    </style>
 </head>
 <body>
-<div id="app">
 
-  <!-- 1. LANDING -->
-  <div class="screen active" id="screen-landing">
-    <div>
-      <div class="eyebrow">// diagnostics</div>
-      <h1>Refresh Rate Check</h1>
-      <p class="sub">Read your device's real specs, then feel the difference between frame rates on a simulated home screen — from a sluggish 30&nbsp;Hz up to 1000&nbsp;Hz.</p>
+    <div id="hud">
+        <div class="stat-group">
+            <div class="stat-label">Device Refresh Rate</div>
+            <div class="stat-value" id="hzDisplay">Detecting...</div>
+        </div>
+        <div class="stat-group">
+            <div class="stat-label">Current FPS</div>
+            <div class="stat-value" id="fpsDisplay">--</div>
+        </div>
+        <div class="stat-group">
+            <div class="stat-label">Frame Time</div>
+            <div class="stat-value" id="msDisplay">-- ms</div>
+        </div>
     </div>
-    <div class="scope">
-      <svg viewBox="0 0 340 140">
-        <g class="scope-grid">
-          <line x1="0" y1="20" x2="340" y2="20"></line>
-          <line x1="0" y1="70" x2="340" y2="70"></line>
-          <line x1="0" y1="120" x2="340" y2="120"></line>
-          <line x1="56" y1="0" x2="56" y2="140"></line>
-          <line x1="113" y1="0" x2="113" y2="140"></line>
-          <line x1="170" y1="0" x2="170" y2="140"></line>
-          <line x1="227" y1="0" x2="227" y2="140"></line>
-          <line x1="284" y1="0" x2="284" y2="140"></line>
-        </g>
-        <path id="scopeWave" class="scope-wave" d="M0,70 L340,70"></path>
-      </svg>
-    </div>
-    <div class="landing-foot">
-      <button class="primary" onclick="goTo('specs')">Run Device Check</button>
-      <div class="hint">reads live browser &amp; hardware data — nothing leaves this page</div>
-    </div>
-  </div>
 
-  <!-- 2. SPECS -->
-  <div class="screen" id="screen-specs">
-    <div class="topbar">
-      <button class="back" onclick="goTo('landing')">‹ Back</button>
-      <div class="eyebrow" style="margin:0;">01 / spec report</div>
-    </div>
-    <div class="device-headline">
-      <span class="model" id="specModel">Detecting…</span>
-      <span id="specOS">—</span>
-    </div>
-    <div class="spec-scroll">
-      <div class="spec-card" id="specCard"></div>
-    </div>
-    <button class="primary" onclick="goTo('fpsSelect')">Test Framerate / FPS</button>
-  </div>
+    <canvas id="canvas"></canvas>
 
-  <!-- 3. FPS SELECT -->
-  <div class="screen" id="screen-fps-select">
-    <div class="topbar">
-      <button class="back" onclick="goTo('specs')">‹ Back</button>
-      <div class="eyebrow" style="margin:0;">02 / choose target</div>
-    </div>
-    <h1 style="font-size:20px;">Pick a frame rate</h1>
-    <p class="sub">Each option drives the demo screen at that target rate so you can feel the motion.</p>
-    <div class="fps-grid" id="fpsGrid"></div>
-  </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
 
-  <!-- 4. HOME SIM -->
-  <div class="screen" id="screen-home-sim">
-    <div class="hud">
-      <div class="chip">TARGET<b id="hudTarget">—</b></div>
-      <div class="chip" style="text-align:right;">MEASURED<b id="hudMeasured">—</b></div>
-    </div>
-    <div class="sim-status">
-      <span id="simTime">10:56</span>
-      <span id="simDeviceName" style="font-size:11px;opacity:.75;">Device</span>
-    </div>
-    <div class="sim-search">
-      <span>Search</span><span>⋮</span>
-    </div>
-    <div class="sim-wrap" id="simWrap">
-      <div class="sim-pages" id="simPages"></div>
-    </div>
-    <div class="sim-dots" id="simDots"></div>
-    <div class="sim-controls">
-      <button class="back" onclick="goTo('fpsSelect')">‹ Change FPS</button>
-      <button class="demo" id="demoBtn" onclick="toggleDemo()">▶ Auto swipe</button>
-    </div>
-  </div>
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
 
-</div>
+        // Object movement state variables
+        let x = canvas.width / 2;
+        let y = canvas.height / 2;
+        let vx = 10; // Velocity vector X
+        let vy = 7;  // Velocity vector Y
+        const radius = 25;
 
-<script>
-/* ---------------- navigation ---------------- */
-const screens = {
-  landing: document.getElementById('screen-landing'),
-  specs: document.getElementById('screen-specs'),
-  fpsSelect: document.getElementById('screen-fps-select'),
-  homeSim: document.getElementById('screen-home-sim'),
-};
-function goTo(name){
-  Object.values(screens).forEach(s=>s.classList.remove('active'));
-  screens[name].classList.add('active');
-  if(name==='specs') runDeviceCheck();
-  if(name==='fpsSelect') buildFpsGrid();
-  if(name==='homeSim'){ /* target already set before nav */ }
-  if(name!=='homeSim') stopSim();
-}
+        // Metrics tracking
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let fpsTimer = 0;
+        let hzSamples = [];
 
-/* ---------------- scope wave idle animation ---------------- */
-(function(){
-  const path = document.getElementById('scopeWave');
-  let t=0;
-  function frame(){
-    t += 0.06;
-    let d = "M0,70 ";
-    for(let x=0;x<=340;x+=8){
-      const y = 70 + Math.sin(x*0.05 + t)*22*Math.exp(-Math.pow((x-170)/170,2)*0.6);
-      d += `L${x},${y.toFixed(1)} `;
-    }
-    path.setAttribute('d', d);
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-})();
+        function animate(currentTime) {
+            const delta = currentTime - lastTime;
+            lastTime = currentTime;
 
-/* ---------------- device check ---------------- */
-function guessDevice(ua){
-  const m = ua.match(/\(([^)]+)\)/);
-  let inner = m ? m[1] : ua;
-  let model = null;
-  const buildMatch = ua.match(/;\s*([A-Za-z0-9\-\_ ]+)\sBuild\//);
-  if(buildMatch) model = buildMatch[1].trim();
-  if(!model){
-    const iP = ua.match(/(iPhone|iPad|iPod)/);
-    if(iP) model = iP[1];
-  }
-  return model || 'Unknown model';
-}
-function osInfo(ua){
-  if(/Android/.test(ua)){
-    const v = ua.match(/Android\s([\d.]+)/);
-    return 'Android ' + (v?v[1]:'');
-  }
-  if(/iPhone|iPad|iPod/.test(ua)){
-    const v = ua.match(/OS\s([\d_]+)/);
-    return 'iOS ' + (v?v[1].replace(/_/g,'.'):'');
-  }
-  if(/Windows/.test(ua)) return 'Windows';
-  if(/Mac OS X/.test(ua)) return 'macOS';
-  if(/Linux/.test(ua)) return 'Linux';
-  return navigator.platform || 'Unknown OS';
-}
-let measuredRefreshHz = null;
-function measureRefreshRate(cb){
-  let last = performance.now();
-  let deltas = [];
-  let frames = 0;
-  function tick(now){
-    deltas.push(now-last);
-    last = now;
-    frames++;
-    if(frames < 40){
-      requestAnimationFrame(tick);
-    } else {
-      deltas = deltas.slice(5); // drop warmup
-      const avg = deltas.reduce((a,b)=>a+b,0)/deltas.length;
-      const hz = Math.round(1000/avg);
-      cb(hz);
-    }
-  }
-  requestAnimationFrame(tick);
-}
-function runDeviceCheck(){
-  const ua = navigator.userAgent;
-  document.getElementById('specModel').textContent = guessDevice(ua);
-  document.getElementById('specOS').textContent = osInfo(ua);
-  document.getElementById('simDeviceName').textContent = guessDevice(ua);
+            // Update FPS metrics every second
+            frameCount++;
+            fpsTimer += delta;
 
-  const rows = [];
-  rows.push(['Platform', navigator.platform || '—']);
-  rows.push(['CPU cores', navigator.hardwareConcurrency ? navigator.hardwareConcurrency+' logical' : '—']);
-  if(navigator.deviceMemory) rows.push(['RAM (approx.)', navigator.deviceMemory+' GB']);
-  rows.push(['Screen (CSS px)', screen.width+' × '+screen.height]);
-  rows.push(['Screen (physical px)', Math.round(screen.width*devicePixelRatio)+' × '+Math.round(screen.height*devicePixelRatio)]);
-  rows.push(['Pixel ratio', 'x'+devicePixelRatio]);
-  rows.push(['Color depth', screen.colorDepth+'-bit']);
-  rows.push(['Viewport', window.innerWidth+' × '+window.innerHeight]);
-  rows.push(['Orientation', (screen.orientation && screen.orientation.type) || '—']);
-  rows.push(['Language', navigator.language || '—']);
-  rows.push(['Timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || '—']);
-  if(navigator.connection){
-    rows.push(['Network', (navigator.connection.effectiveType||'—').toUpperCase()]);
-  }
-  if('getBattery' in navigator){
-    navigator.getBattery().then(b=>{
-      const el = document.createElement('div');
-      el.className='spec-row';
-      el.innerHTML = `<span class="k">Battery</span><span class="v">${Math.round(b.level*100)}% ${b.charging?'(charging)':''}</span>`;
-      document.getElementById('specCard').appendChild(el);
-    });
-  }
-  rows.push(['Refresh rate', 'measuring…']);
+            if (fpsTimer >= 1000) {
+                const currentFps = Math.round((frameCount * 1000) / fpsTimer);
+                document.getElementById('fpsDisplay').innerText = currentFps;
+                frameCount = 0;
+                fpsTimer = 0;
+            }
 
-  const card = document.getElementById('specCard');
-  card.innerHTML = rows.map(r=>`<div class="spec-row"><span class="k">${r[0]}</span><span class="v">${r[1]}</span></div>`).join('');
+            // Real-time dynamic display refresh rate (Hz) estimation based on frame intervals
+            if (delta > 0) {
+                const instantaneousHz = Math.round(1000 / delta);
+                if (instantaneousHz > 15 && instantaneousHz < 500) {
+                    hzSamples.push(instantaneousHz);
+                    if (hzSamples.length > 25) {
+                        hzSamples.shift();
+                        const avgHz = Math.round(hzSamples.reduce((a, b) => a + b, 0) / hzSamples.length);
+                        document.getElementById('hzDisplay').innerText = avgHz + ' Hz';
+                    }
+                }
+            }
 
-  measureRefreshRate(hz=>{
-    measuredRefreshHz = hz;
-    const rowEls = card.querySelectorAll('.spec-row .k');
-    rowEls.forEach(el=>{
-      if(el.textContent==='Refresh rate'){
-        el.nextElementSibling.textContent = hz + ' Hz (display cap)';
-      }
-    });
-  });
-}
+            document.getElementById('msDisplay').innerText = delta.toFixed(1) + ' ms';
 
-/* ---------------- fps select ---------------- */
-const FPS_OPTIONS = [30,60,90,120,144,165,185,200,240,1000];
-let targetFps = 60;
-function buildFpsGrid(){
-  const grid = document.getElementById('fpsGrid');
-  grid.innerHTML = FPS_OPTIONS.map((f,i)=>{
-    const isHero = f===1000;
-    return `<div class="fps-opt ${isHero?'hero':''}" onclick="pickFps(${f})">
-      <span class="n">${f}</span>
-      <span class="u">${isHero?'FPS · extreme':'FPS'}</span>
-    </div>`;
-  }).join('');
-}
-function pickFps(f){
-  targetFps = f;
-  document.getElementById('hudTarget').innerHTML = f + ' <span style="opacity:.6;font-weight:400;">fps</span>';
-  buildHomeSim();
-  goTo('homeSim');
-  startMeasuring();
-}
+            // Clear canvas viewport
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-/* ---------------- home screen simulation ---------------- */
-const PAGE1 = [
-  {l:'WA Business', bg:'#25D366', glyph:'💬', badge:'999+'},
-  {l:'Social Media', bg:'linear-gradient(135deg,#555,#333)', glyph:'⧉', badge:'30'},
-  {l:'File Management', bg:'linear-gradient(135deg,#666,#444)', glyph:'🗂️'},
-  {l:'Banking And Finance', bg:'linear-gradient(135deg,#555,#333)', glyph:'🏦', badge:'1'},
-  {l:'Artificial Intelligence', bg:'linear-gradient(135deg,#666,#444)', glyph:'✳️'},
-  {l:'Thunder VPN', bg:'#1FB5C4', glyph:'⚡'},
-  {l:'myMTN NG', bg:'#FFCC00', glyph:'my', dark:true},
-  {l:'CapCut', bg:'#fff', glyph:'✂️', badge:'6', dark:true},
-  {l:'Bolt', bg:'#2ECC71', glyph:'B'},
-  {l:'Pinterest', bg:'#E60023', glyph:'P'},
-  {l:'Bible', bg:'#fff', glyph:'📖', dark:true},
-  {l:'CPU-Z', bg:'#3B2E86', glyph:'▦'},
-  {l:'Spotify', bg:'#000', glyph:'🎵'},
-  {l:'Carry1st Shop', bg:'#fff', glyph:'C', dark:true},
-  {l:'Opera GX', bg:'#000', glyph:'◐'},
-  {l:'YT Studio', bg:'#fff', glyph:'▶️', dark:true},
-];
-const PAGE2 = [
-  {l:'Samsung', bg:'linear-gradient(135deg,#666,#444)', glyph:'S'},
-  {l:'Google', bg:'linear-gradient(135deg,#666,#444)', glyph:'G', badge:'19'},
-  {l:'Play Store', bg:'#fff', glyph:'▶', dark:true},
-  {l:'Galaxy Store', bg:'linear-gradient(135deg,#ff5f6d,#ff3d5e)', glyph:'🛍️'},
-  {l:'Phone', bg:'#26C265', glyph:'📞'},
-  {l:'Messages', bg:'#2E86FF', glyph:'💬', badge:'92'},
-  {l:'Camera', bg:'#E23A6E', glyph:'📷'},
-  {l:'Gallery', bg:'#C2185B', glyph:'✿'},
-  {l:'Clock', bg:'#4A4AE0', glyph:'🕐'},
-  {l:'Contacts', bg:'#FF8A00', glyph:'👤'},
-  {l:'Settings', bg:'#5A6674', glyph:'⚙️'},
-  {l:'Calendar', bg:'#00897B', glyph:'📅'},
-  {l:'Gaming Hub', bg:'#3B2E86', glyph:'🎮'},
-  {l:'Tips', bg:'#FF8A00', glyph:'💡'},
-  {l:'MTN Menu', bg:'#2E6FE2', glyph:'📄'},
-  {l:'Xender', bg:'#fff', glyph:'✕', dark:true},
-];
-function iconTile(item){
-  const badge = item.badge ? `<span class="badge">${item.badge}</span>` : '';
-  return `<div class="sim-icon">
-    <div class="tile" style="background:${item.bg};color:${item.dark?'#111':'#fff'};">${item.glyph}${badge}</div>
-    <div class="label">${item.l}</div>
-  </div>`;
-}
-function buildHomeSim(){
-  document.getElementById('simPages').innerHTML = `
-    <div class="sim-page"><div class="sim-icon-grid">${PAGE1.map(iconTile).join('')}</div></div>
-    <div class="sim-page"><div class="sim-icon-grid">${PAGE2.map(iconTile).join('')}</div></div>
-  `;
-  document.getElementById('simDots').innerHTML = `<span class="on"></span><span></span><span></span>`;
-  updateClock();
-}
-function updateClock(){
-  const d = new Date();
-  const h = d.getHours().toString().padStart(2,'0');
-  const m = d.getMinutes().toString().padStart(2,'0');
-  document.getElementById('simTime').textContent = h+':'+m;
-}
-setInterval(updateClock, 15000);
+            // Update moving object positions
+            x += vx;
+            y += vy;
 
-/* ---- drag / auto-swipe driven at target fps ---- */
-const pagesEl = () => document.getElementById('simPages');
-const wrapEl = () => document.getElementById('simWrap');
-let dragX = 0;          // current offset in px, 0 = page1, -width = page2
-let dragging = false;
-let startX = 0;
-let startOffset = 0;
-let pendingOffset = 0;
-let renderTimer = null;
-let lastFrameApplied = 0;
+            // Handle boundary collisions (bouncing smoothly off edges)
+            if (x - radius < 0 || x + radius > canvas.width) {
+                vx = -vx;
+                x = Math.max(radius, Math.min(canvas.width - radius, x));
+            }
+            if (y - radius < 0 || y + radius > canvas.height) {
+                vy = -vy;
+                y = Math.max(radius, Math.min(canvas.height - radius, y));
+            }
 
-function applyOffset(px){
-  const el = pagesEl();
-  if(!el) return;
-  const w = wrapEl().clientWidth;
-  const clamped = Math.max(-w, Math.min(0, px));
-  dragX = clamped;
-  el.style.transform = `translateX(${clamped}px)`;
-  document.querySelectorAll('#simDots span').forEach((d,i)=>{
-    d.classList.toggle('on', (clamped < -w/2) ? i===1 : i===0);
-  });
-}
+            // Render glowing object on screen
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#38bdf8';
+            ctx.shadowColor = '#38bdf8';
+            ctx.shadowBlur = 18;
+            ctx.fill();
+            ctx.closePath();
+            ctx.shadowBlur = 0; // Reset shadow
 
-function throttledRenderLoop(){
-  const interval = 1000/targetFps;
-  function step(){
-    applyOffset(pendingOffset);
-    renderTimer = setTimeout(step, interval);
-  }
-  step();
-}
-function stopRenderLoop(){
-  if(renderTimer){ clearTimeout(renderTimer); renderTimer=null; }
-}
+            requestAnimationFrame(animate);
+        }
 
-function onDown(e){
-  dragging = true;
-  startX = (e.touches ? e.touches[0].clientX : e.clientX);
-  startOffset = dragX;
-  stopDemo();
-}
-function onMove(e){
-  if(!dragging) return;
-  const x = (e.touches ? e.touches[0].clientX : e.clientX);
-  pendingOffset = startOffset + (x - startX);
-}
-function onUp(){
-  if(!dragging) return;
-  dragging = false;
-  const w = wrapEl().clientWidth;
-  const snap = (dragX < -w/2) ? -w : 0;
-  pendingOffset = snap;
-}
-function bindDrag(){
-  const wrap = wrapEl();
-  wrap.addEventListener('mousedown', onDown);
-  wrap.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', onUp);
-  wrap.addEventListener('touchstart', onDown, {passive:true});
-  wrap.addEventListener('touchmove', onMove, {passive:true});
-  wrap.addEventListener('touchend', onUp);
-}
-bindDrag();
-
-/* ---- auto-demo swipe, also paced by target fps ---- */
-let demoActive = false;
-let demoDir = -1;
-function toggleDemo(){
-  demoActive ? stopDemo() : startDemo();
-}
-function startDemo(){
-  demoActive = true;
-  document.getElementById('demoBtn').textContent = '⏸ Auto swipe';
-  document.getElementById('demoBtn').classList.add('active');
-  demoLoop();
-}
-function stopDemo(){
-  demoActive = false;
-  const btn = document.getElementById('demoBtn');
-  if(btn){ btn.textContent='▶ Auto swipe'; btn.classList.remove('active'); }
-}
-function demoLoop(){
-  if(!demoActive) return;
-  const w = wrapEl().clientWidth;
-  const target = demoDir < 0 ? -w : 0;
-  const speed = w / 45; // px per tick baseline, feel scales with fps via render interval
-  if(demoDir < 0){
-    pendingOffset = Math.max(target, pendingOffset - speed);
-    if(pendingOffset <= target){ demoDir = 1; setTimeout(demoLoop, 550); return; }
-  } else {
-    pendingOffset = Math.min(target, pendingOffset + speed);
-    if(pendingOffset >= target){ demoDir = -1; setTimeout(demoLoop, 550); return; }
-  }
-  const interval = 1000/targetFps;
-  setTimeout(demoLoop, interval);
-}
-function stopSim(){
-  stopDemo();
-  stopRenderLoop();
-}
-
-/* ---- measured fps HUD (actual browser render rate) ---- */
-let measureRunning = false;
-function startMeasuring(){
-  pendingOffset = 0; dragX = 0;
-  stopRenderLoop();
-  throttledRenderLoop();
-  if(measureRunning) return;
-  measureRunning = true;
-  let frames = 0, last = performance.now(), acc=0;
-  function loop(now){
-    if(screens.homeSim.classList.contains('active')){
-      frames++;
-      const dt = now-last; last=now;
-      acc += dt;
-      if(acc > 500){
-        const fps = Math.round(frames / (acc/1000));
-        document.getElementById('hudMeasured').innerHTML = fps + ' <span style="opacity:.6;font-weight:400;">fps</span>';
-        frames = 0; acc = 0;
-      }
-    }
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
-}
-</script>
+        requestAnimationFrame(animate);
+    </script>
 </body>
 </html>
